@@ -1,4 +1,6 @@
 import csv
+from flask_cors import CORS  # Import the CORS class
+
 from flask import Flask, jsonify
 import requests
 from bs4 import BeautifulSoup
@@ -95,52 +97,8 @@ def extract_post_info(post):
 
 
 
-
-
-
-# Base URL to scrape
-# base_url = "https://www.skidrow-games.com/page/"
-
-# Open the CSV file in write mode
-# with open("skidrow_games_posts.csv", "w", newline="", encoding="utf-8") as csvfile:
-#     writer = csv.writer(csvfile)
-#     # Write the CSV header row
-#     writer.writerow(["Title", "Date", "Category", "Image URL", "Post URL", "Comments Count", "Post Details", "About the Game Title", "Genre", "Developer", "Publisher", "Release Date", "Minimum Requirements", "Recommended Requirements", "NFO", "Magnet URL", "Torrent URL"])
-#
-#     # Loop through multiple pages
-#     for page_number in range(1, 3):  # Assuming you want to scrape data from pages 1 to 2
-#         # Construct the URL for the current page
-#         url = f"{base_url}{page_number}/"
-#
-#         # Open the URL in the browser
-#         driver.get(url)
-#
-#         # Wait for the posts to load
-#         WebDriverWait(driver, 10).until(EC.presence_of_all_elements_located((By.CLASS_NAME, "post")))
-#
-#         # Find all the post elements on the current page
-#         posts = driver.find_elements(By.CLASS_NAME, "post")
-#
-#         # Get data from each post and write it to the CSV file
-#         # Inside the main loop
-#         for post in posts:
-#             try:
-#                 title, date, category, image_url, post_url, comments_count, post_details_text, about_game, genre, developer, publisher, release_date, minimum_requirements, recommended_requirements, nfo, magnet_url, torrent_url = extract_post_info(post)
-#
-#         # Extract the about game section
-#                 about_game_data = extract_about_game_section(post_details_text)
-#
-#             # Write the data to the CSV file
-#                 writer.writerow([title, date, category, image_url, post_url, comments_count, post_details_text, about_game, genre, developer, publisher, release_date, minimum_requirements, recommended_requirements, nfo, magnet_url, torrent_url])
-#             except Exception as e:
-#                 print(f"Error processing post: {e}")
-#
-# # Close the browser
-# driver.quit()
-
-# print("Post data from multiple pages has been scraped and saved to skidrow_games_posts.csv.")
 app = Flask(__name__)
-
+CORS(app)
 def scrape_data_from_page(page_number):
     chrome_service = ChromeService("./chromedriver.exe")
     chrome_options = Options()
@@ -163,11 +121,11 @@ def scrape_data_from_page(page_number):
                 "Title": title,
                 "Date": date,
                 "Category": category,
-                "Image URL": image_url,
-                "Post URL": post_url,
-                "Comments Count": comments_count,
-                "Post Details": post_details_text,
-                "About the Game Title": about_game,
+                "Image_URL": image_url,
+                "Post_URL": post_url,
+                "Comments_Count": comments_count,
+                "Post_Details": post_details_text,
+                "About_the_Game_Title": about_game,
                 "Genre": genre,
                 "Developer": developer,
                 "Publisher": publisher,
@@ -175,8 +133,8 @@ def scrape_data_from_page(page_number):
                 "Minimum Requirements": minimum_requirements,
                 "Recommended Requirements": recommended_requirements,
                 "NFO": nfo,
-                "Magnet URL": magnet_url,
-                "Torrent URL": torrent_url
+                "Magnet_URL": magnet_url,
+                "Torrent_URL": torrent_url
             }
             scraped_data.append(post_data)
         except Exception as e:
@@ -184,14 +142,79 @@ def scrape_data_from_page(page_number):
 
     driver.quit()
     return scraped_data
+def extract_data_from_post(url):
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    # Extract data from the post page using appropriate HTML tags and classes
+    title = soup.find('h2').text.strip()
+    date = soup.find('div', class_='meta').text.strip().split(' in ')[0]
+    category = soup.find('div', class_='meta').find('a').text.strip()
+    image_url = soup.find('img', class_='aligncenter')['src']
+    about_game = soup.find('h5', string='ABOUT THE GAME :').find_next('p').text.strip()
+
+    # Extract other relevant information similarly
+
+    # Example: Extract magnet URL
+    magnet_url = soup.find('a', href=True, target='_blank', attrs={'href': lambda x: 'magnet' in x})['href']
+
+    # Example: Extract torrent URL
+    torrent_url = soup.find('a', href=True, target='_blank', attrs={'href': lambda x: 'pixeldrain' in x})['href']
+
+    # Construct a dictionary with the extracted data
+    post_data = {
+        "Title": title,
+        "Date": date,
+        "Category": category,
+        "Image_URL": image_url,
+        "Post_URL": url,
+        "About_the_Game_Title": about_game,
+        "Magnet_URL": magnet_url,
+        "Torrent_URL": torrent_url
+        # Add more data as needed
+    }
+
+    return post_data
+
+@app.route('/api/post/<string:post_url>', methods=['GET'])
+def get_scraped_data(post_url):
+    try:
+        base_url = f"https://www.skidrow-games.com/{post_url}/"
+        print(base_url)
+
+        scraped_data2 = extract_data_from_post(base_url)
+        print(scraped_data2)
+        return jsonify({"success": True, "data": scraped_data2})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 @app.route('/api/scraped_data/<int:page_number>', methods=['GET'])
-def get_scraped_data(page_number):
+def get_scraped_data2(page_number):
     try:
         scraped_data = scrape_data_from_page(page_number)
         return jsonify({"success": True, "data": scraped_data})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+# @app.route('/api/post/<string:page_url>', methods=['GET'])
+# def get_post_by_title(page_url):
+#     try:
+#
+#         # Logic to find the post URL based on the provided title
+#         # You can implement your own logic to search for the post URL in your data source
+#         # For example, you can search in the 'scraped_data' list
+#         # Placeholder logic:
+#         post_url = f"https://www.skidrow-games.com/scene-investigators-tenoke/"
+#
+#         if post_url:
+#             # Scrape data from the post URL
+#             scraped_data = scrape_data_from_post_url(page_url)
+#             print(scraped_data)
+#             return jsonify({"success": True, "data": scraped_data})
+#         else:
+#             return jsonify({"success": False, "error": "Post not found"})
+#     except Exception as e:
+#         return jsonify({"success": False, "error": str(e)})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
